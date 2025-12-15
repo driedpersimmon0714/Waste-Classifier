@@ -645,14 +645,17 @@
         // Load model
         async function loadModel() {
             try {
-                updateStatus('loading', 'Loading model...');
-                model = await tf.loadLayersModel('./model.json')
-                updateStatus('ready', 'Model ready');
+                updateStatus?.('loading', 'Loading model...');
+                model = await tf.loadLayersModel('./model.json');
+
+                updateStatus?.('ready', 'Model ready');
                 console.log('Model loaded successfully');
             } catch (error) {
                 console.error('Error loading model:', error);
-                updateStatus('error', 'Model load failed');
-                alert('Failed to load the model. Please make sure the tfjs_model folder is in the same directory as this HTML file.');
+
+                updateStatus?.('error', 'Model load failed');
+
+                alert('Model failed to load. Please check the browser console for details.');
             }
         }
 
