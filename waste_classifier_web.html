@@ -646,7 +646,7 @@
         async function loadModel() {
             try {
                 updateStatus('loading', 'Loading model...');
-                model = await tf.loadLayersModel(MODEL_URL);
+                model = await tf.loadLayersModel('./model.json')
                 updateStatus('ready', 'Model ready');
                 console.log('Model loaded successfully');
             } catch (error) {
