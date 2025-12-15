@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoSort - AI Waste Classification</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2D6A4F;
+            --secondary: #52B788;
+            --accent: #40916C;
+            --food: #E07A5F;
+            --general: #81B29A;
+            --recyclable: #3D5A80;
+            --bg: #F8F9FA;
+            --text: #1B263B;
+            --text-light: #415A77;
+            --shadow: 0 4px 24px rgba(45, 106, 79, 0.12);
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: linear-gradient(135deg, #F8F9FA 0%, #E9ECEF 100%);
+            color: var(--text);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Decorative background elements */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            right: -20%;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(82, 183, 136, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            z-index: 0;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -30%;
+            left: -10%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(45, 106, 79, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            z-index: 0;
+            animation: float 25s ease-in-out infinite reverse;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-30px, -50px) rotate(5deg); }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        .tagline {
+            font-size: 1.25rem;
+            color: var(--text-light);
+            font-weight: 400;
+        }
+
+        /* Main Content Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 968px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Upload Card */
+        .upload-card {
+            background: white;
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: var(--shadow);
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+
+        .upload-zone {
+            border: 3px dashed var(--secondary);
+            border-radius: 16px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, rgba(82, 183, 136, 0.05) 0%, rgba(45, 106, 79, 0.05) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            width: 100%;
+            height: 100%;
+            background: rgba(82, 183, 136, 0.1);
+            border-radius: 50%;
+            transition: transform 0.6s ease;
+        }
+
+        .upload-zone:hover::before {
+            transform: translate(-50%, -50%) scale(2);
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: linear-gradient(135deg, rgba(82, 183, 136, 0.1) 0%, rgba(45, 106, 79, 0.1) 100%);
+            transform: translateY(-4px);
+        }
+
+        .upload-zone.dragover {
+            background: rgba(82, 183, 136, 0.15);
+            border-color: var(--accent);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 16px;
+            display: block;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .upload-text {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .upload-subtext {
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* Image Preview */
+        #imagePreview {
+            display: none;
+            margin-top: 24px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+
+        #imagePreview img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Results Card */
+        .results-card {
+            background: white;
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: var(--shadow);
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #results {
+            display: none;
+        }
+
+        .result-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-light);
+            text-align: center;
+        }
+
+        .result-placeholder-icon {
+            font-size: 4rem;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        /* Classification Result */
+        .classification {
+            text-align: center;
+            margin-bottom: 32px;
+            animation: slideIn 0.6s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .category-badge {
+            display: inline-block;
+            padding: 12px 32px;
+            border-radius: 50px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            animation: scaleIn 0.5s ease-out 0.2s both;
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .category-badge.food {
+            background: linear-gradient(135deg, #E07A5F 0%, #F4A261 100%);
+            color: white;
+        }
+
+        .category-badge.general {
+            background: linear-gradient(135deg, #81B29A 0%, #95D5B2 100%);
+            color: white;
+        }
+
+        .category-badge.recyclable {
+            background: linear-gradient(135deg, #3D5A80 0%, #577399 100%);
+            color: white;
+        }
+
+        .confidence {
+            font-size: 1.1rem;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        /* Explanation Section */
+        .explanation {
+            background: linear-gradient(135deg, rgba(82, 183, 136, 0.08) 0%, rgba(45, 106, 79, 0.08) 100%);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: auto;
+            border-left: 4px solid var(--secondary);
+            animation: fadeIn 0.8s ease-out 0.4s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .explanation h3 {
+            color: var(--primary);
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .explanation p {
+            color: var(--text);
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        /* Loading Spinner */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(82, 183, 136, 0.2);
+            border-top-color: var(--secondary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Button */
+        .btn {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(45, 106, 79, 0.3);
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(45, 106, 79, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Info Section */
+        .info-section {
+            background: white;
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: var(--shadow);
+            animation: fadeInUp 0.8s ease-out 0.6s both;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 32px;
+        }
+
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .info-item {
+            text-align: center;
+            padding: 24px;
+            border-radius: 16px;
+            transition: transform 0.3s ease;
+        }
+
+        .info-item:hover {
+            transform: translateY(-4px);
+        }
+
+        .info-item.food {
+            background: linear-gradient(135deg, rgba(224, 122, 95, 0.1) 0%, rgba(244, 162, 97, 0.1) 100%);
+        }
+
+        .info-item.general {
+            background: linear-gradient(135deg, rgba(129, 178, 154, 0.1) 0%, rgba(149, 213, 178, 0.1) 100%);
+        }
+
+        .info-item.recyclable {
+            background: linear-gradient(135deg, rgba(61, 90, 128, 0.1) 0%, rgba(87, 115, 153, 0.1) 100%);
+        }
+
+        .info-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+
+        .info-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .info-desc {
+            font-size: 0.95rem;
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+
+        /* Animations */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Model Status */
+        .model-status {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: white;
+            padding: 12px 20px;
+            border-radius: 50px;
+            box-shadow: var(--shadow);
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 100;
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--secondary);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.1);
+            }
+        }
+
+        .status-dot.loading {
+            background: #FFA500;
+        }
+
+        .status-dot.ready {
+            background: var(--secondary);
+        }
+
+        .status-dot.error {
+            background: #E07A5F;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌱 EcoSort</h1>
+            <p class="tagline">AI-Powered Waste Classification for Smarter Recycling</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Upload Section -->
+            <div class="upload-card">
+                <h2 style="margin-bottom: 24px; color: var(--primary);">Upload Image</h2>
+                <div class="upload-zone" id="uploadZone">
+                    <span class="upload-icon">📸</span>
+                    <p class="upload-text">Drop your image here</p>
+                    <p class="upload-subtext">or click to browse</p>
+                    <input type="file" id="fileInput" accept="image/*">
+                </div>
+                <div id="imagePreview"></div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-card">
+                <h2 style="margin-bottom: 24px; color: var(--primary);">Classification Result</h2>
+                
+                <div class="result-placeholder" id="placeholder">
+                    <span class="result-placeholder-icon">🔍</span>
+                    <p>Upload an image to see the classification result</p>
+                </div>
+
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Analyzing image...</p>
+                </div>
+
+                <div id="results">
+                    <div class="classification">
+                        <div class="category-badge" id="categoryBadge"></div>
+                        <p class="confidence" id="confidence"></p>
+                    </div>
+                    <div class="explanation">
+                        <h3>💡 Disposal Guide</h3>
+                        <p id="explanation">Detailed explanation will appear here...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Section -->
+        <div class="info-section">
+            <h2 style="text-align: center; color: var(--primary); margin-bottom: 8px;">How It Works</h2>
+            <p style="text-align: center; color: var(--text-light); margin-bottom: 32px;">
+                Our AI model classifies waste into three categories based on Korean Ministry of Environment guidelines
+            </p>
+            <div class="info-grid">
+                <div class="info-item food">
+                    <div class="info-icon">🍎</div>
+                    <h3 class="info-title">Food Waste</h3>
+                    <p class="info-desc">Leftover food, fruit peels, vegetable scraps (음식물 쓰레기)</p>
+                </div>
+                <div class="info-item general">
+                    <div class="info-icon">🗑️</div>
+                    <h3 class="info-title">General Waste</h3>
+                    <p class="info-desc">Non-recyclable items, coated paper, contaminated materials (일반 쓰레기)</p>
+                </div>
+                <div class="info-item recyclable">
+                    <div class="info-icon">♻️</div>
+                    <h3 class="info-title">Recyclable</h3>
+                    <p class="info-desc">Clean paper, plastic, glass, metal (재활용)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Status Indicator -->
+    <div class="model-status">
+        <div class="status-dot loading" id="statusDot"></div>
+        <span id="statusText">Loading model...</span>
+    </div>
+
+    <script>
+        // Configuration
+        const MODEL_URL = './tfjs_model/model.json'; // Update this path
+        const CLASS_NAMES = ['food', 'general', 'recyclable'];
+        const CLASS_DISPLAY = {
+            'food': 'Food Waste 음식물',
+            'general': 'General Waste 일반',
+            'recyclable': 'Recyclable 재활용'
+        };
+
+        // Disposal guidelines
+        const DISPOSAL_GUIDES = {
+            'food': {
+                emoji: '🍎',
+                title: 'Food Waste (음식물 쓰레기)',
+                guide: 'This should go in the food waste bin. Remove any packaging or inedible parts like bones, shells, or fruit pits. In Korea, food waste is collected separately for composting.'
+            },
+            'general': {
+                emoji: '🗑️',
+                title: 'General Waste (일반 쓰레기)',
+                guide: 'This belongs in general waste. Items like coated paper, contaminated materials, or mixed materials cannot be recycled. Place in a standard waste bag.'
+            },
+            'recyclable': {
+                emoji: '♻️',
+                title: 'Recyclable (재활용)',
+                guide: 'This can be recycled! Make sure to clean it and remove any labels or caps. Separate by material type (paper, plastic, glass, metal) according to local guidelines.'
+            }
+        };
+
+        // Global variables
+        let model = null;
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const placeholder = document.getElementById('placeholder');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+
+        // Load model
+        async function loadModel() {
+            try {
+                updateStatus('loading', 'Loading model...');
+                model = await tf.loadLayersModel(MODEL_URL);
+                updateStatus('ready', 'Model ready');
+                console.log('Model loaded successfully');
+            } catch (error) {
+                console.error('Error loading model:', error);
+                updateStatus('error', 'Model load failed');
+                alert('Failed to load the model. Please make sure the tfjs_model folder is in the same directory as this HTML file.');
+            }
+        }
+
+        // Update status indicator
+        function updateStatus(status, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            dot.className = `status-dot ${status}`;
+            statusText.textContent = text;
+        }
+
+        // Upload zone interactions
+        uploadZone.addEventListener('click', () => fileInput.click());
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleImageUpload(file);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleImageUpload(file);
+            }
+        });
+
+        // Handle image upload
+        function handleImageUpload(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                // Display image
+                imagePreview.innerHTML = `<img src="${e.target.result}" alt="Uploaded image">`;
+                imagePreview.style.display = 'block';
+
+                // Classify image
+                classifyImage(e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Classify image
+        async function classifyImage(imageSrc) {
+            if (!model) {
+                alert('Model is not loaded yet. Please wait...');
+                return;
+            }
+
+            // Show loading
+            placeholder.style.display = 'none';
+            results.style.display = 'none';
+            loading.style.display = 'block';
+
+            try {
+                // Load and preprocess image
+                const img = new Image();
+                img.src = imageSrc;
+                await img.decode();
+
+                // Preprocess for MobileNetV2
+                const tensor = tf.browser.fromPixels(img)
+                    .resizeBilinear([224, 224])
+                    .toFloat()
+                    .div(255.0)
+                    .expandDims(0);
+
+                // Predict
+                const predictions = await model.predict(tensor).data();
+                
+                // Get top prediction
+                const maxIndex = predictions.indexOf(Math.max(...predictions));
+                const category = CLASS_NAMES[maxIndex];
+                const confidence = (predictions[maxIndex] * 100).toFixed(1);
+
+                // Display results
+                displayResults(category, confidence);
+
+                // Cleanup
+                tensor.dispose();
+            } catch (error) {
+                console.error('Error during classification:', error);
+                alert('Error during classification. Please try another image.');
+                loading.style.display = 'none';
+                placeholder.style.display = 'flex';
+            }
+        }
+
+        // Display classification results
+        function displayResults(category, confidence) {
+            loading.style.display = 'none';
+            results.style.display = 'block';
+
+            // Update badge
+            const badge = document.getElementById('categoryBadge');
+            badge.textContent = CLASS_DISPLAY[category];
+            badge.className = `category-badge ${category}`;
+
+            // Update confidence
+            document.getElementById('confidence').textContent = `Confidence: ${confidence}%`;
+
+            // Update explanation
+            const guide = DISPOSAL_GUIDES[category];
+            document.getElementById('explanation').textContent = guide.guide;
+        }
+
+        // Initialize
+        loadModel();
+    </script>
+</body>
+</html>
